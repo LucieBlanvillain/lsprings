@@ -8,8 +8,11 @@ struct fmatrix
   int h, w;
 };
 
-struct fresizablematrix open_csv(const char *filename) {
+struct fmatrix open_csv(const char *filename) {
+  struct fmatrix values;
+  FILE csv_file;
 
+  return values;
 }
 
 int main(int argc, char **argv) {

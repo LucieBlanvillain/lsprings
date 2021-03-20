@@ -4,7 +4,10 @@
 #include <unistd.h>
 #include <time.h>
 
-#define NLOOPS 5
+#define NLOOPS 15
+#define SOLIDITY 4
+#define SPRING_WIDTH 12
+
 #define OBJECT_DIAMETER 30
 
 struct fmatrix
@@ -89,11 +92,15 @@ int main(int argc, char **argv) {
   Display *disp;
   GC gc;
   XGCValues gc_attr;
-  Window win, root_win;
+  Window win;
   XWindowAttributes win_attr_get;
   XSetWindowAttributes win_attr_set;
   XEvent event;
   unsigned long white, black;
+  XColor exact_col;
+  Colormap default_cmap;
+  int *colors;
+  Visual *default_visual;
 
   // Position values
   struct fmatrix values;
@@ -101,12 +108,15 @@ int main(int argc, char **argv) {
   float highest_pos = 0;
   /* XPoint *object_positions; */
   XArc *object_drawings;
-  XSegment *strings;
+  /* XSegment *strings; */
+  XPoint *springs;
+  int remainder, should_add;
+  int rel_height;
   float speed;
 
   // simulation variables
   struct sim_state state;
-  int i;
+  int i, j;
 
   // Checking args
 
@@ -190,11 +200,15 @@ int main(int argc, char **argv) {
 
   // initializing sim
 
+  default_visual = DefaultVisual(disp, DefaultScreen(disp));
+  default_cmap = DefaultColormap(disp, DefaultScreen(disp));
+
   /* printf("allocating object positions\n"); */
 
   /* object_positions = malloc(sizeof(XPoint) * values.h); */
   object_drawings = malloc(sizeof(XArc) * values.h);
-  strings = malloc(sizeof(XSegment) * values.h);
+  /* strings = malloc(sizeof(XSegment) * values.h); */
+  springs = malloc(sizeof(XPoint) * values.h * (NLOOPS + 4));
 
   state.is_running = 1;
   state.is_paused = 0;
@@ -230,6 +244,7 @@ int main(int argc, char **argv) {
       if ((float)(clock() - prev_t)/CLOCKS_PER_SEC > speed && state.is_paused != 1) {
 
         XClearWindow(disp, win);
+        /* printf("cleared window\n"); */
 
         for (i=0; i < values.h; i++) {
           object_drawings[i].y = (int) (values.matrix[state.step + i * values.w] * 0.8 * (float)win_attr_get.height) - OBJECT_DIAMETER / 2;
@@ -238,12 +253,30 @@ int main(int argc, char **argv) {
           object_drawings[i].angle2 = 360 * 64;
           object_drawings[i].height = OBJECT_DIAMETER;
           object_drawings[i].width = object_drawings[i].height;
-          strings[i].y1 = i == 0 ? 0 : object_drawings[i-1].y + object_drawings[i - 1].height / 2;
-          strings[i].y2 = object_drawings[i].y;
-          strings[i].x1 = win_attr_get.width / 2;
-          strings[i].x2 = win_attr_get.width / 2;
         }
 
+        for (i=0; i < values.h; i++) {
+          springs[0 + i * (NLOOPS + 4)].y = i == 0 ? 0 : object_drawings[i-1].y + object_drawings[i - 1].height;
+          springs[0 + i * (NLOOPS + 4)].x = win_attr_get.width / 2;
+          springs[1 + i * (NLOOPS + 4)].y = SOLIDITY;
+          springs[1 + i * (NLOOPS + 4)].x = 0;
+          rel_height = (object_drawings[i].y - springs[0 + i * (NLOOPS + 4)].y - SOLIDITY * 2) / NLOOPS;
+          remainder = (object_drawings[i].y - springs[0 + i * (NLOOPS + 4)].y - SOLIDITY * 2) % NLOOPS;
+          springs[2 + i * (NLOOPS + 4)].y = rel_height / 2;
+          springs[2 + i * (NLOOPS + 4)].x = SPRING_WIDTH/ 2;
+
+          for (j=3; j < NLOOPS + 2; j++) {
+            springs[j + i * (NLOOPS + 4)].x = j % 2 == 0 ? SPRING_WIDTH : - SPRING_WIDTH;
+            should_add = remainder > 0 ? 1 : 0;
+            springs[j + i * (NLOOPS + 4)].y = rel_height + should_add;
+            remainder -= should_add;
+          }
+
+          springs[NLOOPS + 2 + i * (NLOOPS + 4)].y = rel_height / 2;
+          springs[NLOOPS + 2 + i * (NLOOPS + 4)].x = j % 2 == 0 ? SPRING_WIDTH / 2 : - SPRING_WIDTH / 2;
+          springs[NLOOPS + 3 + i * (NLOOPS + 4)].y = SOLIDITY + 3;
+          springs[NLOOPS + 3 + i * (NLOOPS + 4)].x = 0;
+        }
 
         prev_t = clock();
         state.step += 1;
@@ -256,7 +289,9 @@ int main(int argc, char **argv) {
 
       XSendEvent(disp, win, 0, ExposureMask, &event);
       XFillArcs(disp, win, gc, object_drawings, values.h);
-      XDrawSegments(disp, win, gc, strings, values.h);
+      for (i=0; i < values.h; i++) {
+        XDrawLines(disp, win, gc, &springs[i * (NLOOPS + 4)], NLOOPS + 4, CoordModePrevious);
+      }
     }
 
 

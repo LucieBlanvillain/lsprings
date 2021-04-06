@@ -4,4 +4,4 @@ main: main.o
 	gcc -o main main.o -lX11
 
 main.o: main.c
-	gcc -c main.c
+	gcc -c src/main.c
